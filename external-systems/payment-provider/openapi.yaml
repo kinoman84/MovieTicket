@@ -1,0 +1,59 @@
+openapi: 3.0.3
+info:
+  title: Abstract Payment Provider API
+  version: 1.0.0
+  description: >-
+    Контракт абстрактного платёжного провайдера, который КиноБилет использует
+    для создания платёжной сессии.
+servers:
+  - url: https://payment-provider.example/v1
+paths:
+  /payments:
+    post:
+      summary: Создать платёжную сессию
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Платёжная сессия создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSession'
+components:
+  schemas:
+    CreatePaymentRequest:
+      type: object
+      required: [orderId, amount, callbackUrl]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          description: Идентификатор заказа в КиноБилете.
+        amount:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Итоговая сумма заказа к оплате.
+        callbackUrl:
+          type: string
+          format: uri
+          description: >-
+            URL КиноБилета, на который провайдер отправляет итоговый статус
+            платежа.
+    PaymentSession:
+      type: object
+      required: [providerPaymentId, paymentUrl]
+      properties:
+        providerPaymentId:
+          type: string
+          description: Идентификатор платежа у провайдера.
+        paymentUrl:
+          type: string
+          format: uri
+          description: Ссылка на страницу оплаты для покупателя.

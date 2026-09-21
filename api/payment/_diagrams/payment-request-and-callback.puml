@@ -1,0 +1,51 @@
+@startuml
+title Инициация оплаты и обработка callback
+
+actor "Покупатель" as customer
+participant "КиноБилет API" as api
+database "Локальная БД" as db
+participant "Платёжный провайдер" as provider
+
+customer -> api: POST /v1/orders/{orderId}/payment
+api -> db: Найти заказ и связанные билеты
+
+alt Заказ не найден
+  api --> customer: 404: заказ не найден
+else Заказ не готов к оплате
+  note right of api
+    Заказ не в статусе pending_payment,
+    нет билетов held или платёж уже существует
+  end note
+  api --> customer: 409: заказ нельзя оплатить
+else Заказ готов к оплате
+  api -> provider: Инициировать платёж\nсумма заказа и URL callback
+  provider --> api: 2xx: providerPaymentId и paymentUrl
+  api -> db: Создать payment со статусом pending
+  api --> customer: 201: создан платёж и ссылка на оплату
+
+  customer -> provider: Оплатить билет по ссылке
+  provider -> api: POST /v1/payment-callbacks\nproviderPaymentId и итоговый статус
+  api -> db: Найти payment, order и tickets
+
+  alt Платёж не найден
+    api --> provider: 404: платёж провайдера не найден
+  else Платёж уже имеет итоговый статус
+    api --> provider: 204: повторный callback обработан
+  else Callback со статусом succeeded
+    group Одна транзакция
+      api -> db: Обновить payment: succeeded, paid_at
+      api -> db: Обновить order: paid
+      api -> db: Обновить tickets: paid
+    end
+    api --> provider: 204: callback обработан
+  else Callback со статусом failed
+    group Одна транзакция
+      api -> db: Обновить payment: failed
+      api -> db: Обновить order: cancelled
+      api -> db: Обновить tickets: cancelled
+    end
+    api --> provider: 204: callback обработан
+  end
+end
+
+@enduml

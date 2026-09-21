@@ -1,0 +1,98 @@
+// Логическая схема локальной БД учебной системы «КиноБилет».
+// Все временные поля хранятся в UTC.
+
+Table cinemas {
+  id uuid [pk, not null, note: 'Идентификатор кинотеатра']
+  name varchar [not null, note: 'Название кинотеатра']
+  address varchar [not null, note: 'Адрес кинотеатра']
+
+  Note: 'Хранит справочник кинотеатров, доступных в системе.'
+}
+
+Table halls {
+  id uuid [pk, not null, note: 'Идентификатор зала']
+  cinema_id uuid [not null, note: 'Идентификатор кинотеатра, которому принадлежит зал']
+  name varchar [not null, note: 'Название или номер зала']
+
+  Note: 'Хранит залы кинотеатров.'
+}
+
+Table seats {
+  id uuid [pk, not null, note: 'Идентификатор места']
+  hall_id uuid [not null, note: 'Идентификатор зала, в котором находится место']
+  row_number integer [not null, note: 'Номер ряда в зале']
+  seat_number integer [not null, note: 'Номер места в ряду']
+
+  indexes {
+    (hall_id, row_number, seat_number) [unique, name: 'uq_seats_hall_row_seat']
+  }
+
+  Note: 'Хранит схему мест в каждом зале.'
+}
+
+Table movies {
+  id uuid [pk, not null, note: 'Идентификатор фильма']
+  title varchar [not null, note: 'Название фильма']
+  duration_minutes integer [not null, note: 'Продолжительность фильма в минутах']
+  age_rating varchar [not null, note: 'Возрастной рейтинг фильма']
+
+  Note: 'Хранит каталог фильмов, которые могут демонстрироваться в кинотеатрах.'
+}
+
+Table screenings {
+  id uuid [pk, not null, note: 'Идентификатор сеанса']
+  movie_id uuid [not null, note: 'Идентификатор демонстрируемого фильма']
+  hall_id uuid [not null, note: 'Идентификатор зала проведения сеанса']
+  starts_at timestamp [not null, note: 'Дата и время начала сеанса в UTC']
+  base_price decimal(10,2) [not null, note: 'Базовая цена билета на сеанс']
+
+  Note: 'Хранит расписание сеансов, фильмы, залы и базовую стоимость билета.'
+}
+
+Table orders {
+  id uuid [pk, not null, note: 'Идентификатор заказа']
+  customer_email varchar [not null, note: 'Email покупателя для заказа']
+  screening_id uuid [not null, note: 'Идентификатор сеанса, к которому относится заказ']
+  status varchar [not null, note: 'Статус заказа: pending_payment, paid или cancelled']
+  total_amount decimal(10,2) [not null, note: 'Итоговая сумма заказа']
+  created_at timestamp [not null, note: 'Дата и время создания заказа в UTC']
+
+  Note: 'Хранит оформленные покупателями заказы на билеты и их состояние.'
+}
+
+Table tickets {
+  id uuid [pk, not null, note: 'Идентификатор билета']
+  order_id uuid [not null, note: 'Идентификатор заказа, содержащего билет']
+  screening_id uuid [not null, note: 'Идентификатор сеанса для билета']
+  seat_id uuid [not null, note: 'Идентификатор выбранного места']
+  price decimal(10,2) [not null, note: 'Цена конкретного билета']
+  status varchar [not null, note: 'Статус билета: held, paid или cancelled']
+
+  indexes {
+    (screening_id, seat_id) [unique, name: 'uq_tickets_screening_seat']
+  }
+
+  Note: 'Хранит билеты из заказов, закреплённые за конкретными местами на сеансах.'
+}
+
+Table payments {
+  id uuid [pk, not null, note: 'Идентификатор платежа в КиноБилете']
+  order_id uuid [not null, unique, note: 'Идентификатор оплачиваемого заказа']
+  provider_payment_id varchar [not null, unique, note: 'Идентификатор платежа у внешнего провайдера']
+  status varchar [not null, note: 'Статус платежа: pending, succeeded или failed']
+  payment_url varchar [not null, note: 'Ссылка на оплату, возвращённая провайдером']
+  created_at timestamp [not null, note: 'Дата и время создания платежа в UTC']
+  paid_at timestamp [note: 'Дата и время успешной оплаты в UTC; отсутствует до оплаты']
+
+  Note: 'Хранит платежи заказов, их идентификаторы у провайдера и результат оплаты.'
+}
+
+Ref: cinemas.id < halls.cinema_id
+Ref: halls.id < seats.hall_id
+Ref: movies.id < screenings.movie_id
+Ref: halls.id < screenings.hall_id
+Ref: screenings.id < orders.screening_id
+Ref: orders.id < tickets.order_id
+Ref: screenings.id < tickets.screening_id
+Ref: seats.id < tickets.seat_id
+Ref: orders.id - payments.order_id

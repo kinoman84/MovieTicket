@@ -1,0 +1,26 @@
+specification {
+  element frontend
+  element backend
+  element database
+  element external_system
+}
+
+model {
+  frontend = frontend 'Фронтенд'
+  backend = backend 'Бэкенд КиноБилет'
+  local_db = database 'Локальная БД КиноБилет'
+  payment_provider = external_system 'Внешний платёжный провайдер'
+
+  frontend -> backend 'REST API КиноБилет по HTTPS/JSON'
+  backend -> local_db 'Читает и записывает локальные данные'
+  backend -> payment_provider 'POST /payments — REST API по HTTPS'
+  payment_provider -> backend 'POST /v1/payment-callbacks — callback по HTTPS'
+}
+
+views {
+  view components {
+    title 'Основные компоненты КиноБилета'
+    include *
+    autoLayout TopBottom
+  }
+}

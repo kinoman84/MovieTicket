@@ -1,0 +1,311 @@
+openapi: 3.0.3
+info:
+  title: KinoBilet API
+  version: 1.0.0
+  description: Текущий API учебной системы продажи билетов в кино.
+servers:
+  - url: https://api.kinobilet.example/v1
+paths:
+  /cinemas:
+    get:
+      summary: Список кинотеатров
+      operationId: listCinemas
+      responses:
+        '200':
+          description: Кинотеатры найдены
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cinema'
+  /movies:
+    get:
+      summary: Список фильмов
+      operationId: listMovies
+      responses:
+        '200':
+          description: Фильмы найдены
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Movie'
+  /screenings:
+    get:
+      summary: Список сеансов
+      operationId: listScreenings
+      parameters:
+        - name: cinemaId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: movieId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Сеансы найдены
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Screening'
+  /screenings/{screeningId}/seats:
+    get:
+      summary: Места на сеанс
+      operationId: listScreeningSeats
+      parameters:
+        - $ref: '#/components/parameters/ScreeningId'
+      responses:
+        '200':
+          description: Схема мест и их доступность
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningSeats'
+        '404':
+          description: Сеанс не найден
+  /orders:
+    post:
+      summary: Создать заказ и зарезервировать места
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Заказ создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Сеанс не найден
+        '422':
+          description: Хотя бы одно место не найдено или не принадлежит залу сеанса
+        '409':
+          description: Хотя бы одно место уже занято
+  /orders/{orderId}:
+    get:
+      summary: Получить заказ
+      operationId: getOrder
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Заказ найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Заказ не найден
+  /orders/{orderId}/payment:
+    post:
+      summary: Инициировать оплату заказа
+      operationId: createPayment
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '201':
+          description: Платёж создан у провайдера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: Заказ не найден
+        '409':
+          description: Заказ нельзя оплатить в текущем статусе
+  /payment-callbacks:
+    post:
+      summary: Callback платёжного провайдера
+      operationId: handlePaymentCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCallback'
+      responses:
+        '204':
+          description: Callback обработан
+        '404':
+          description: Платёж провайдера не найден
+components:
+  parameters:
+    ScreeningId:
+      name: screeningId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Cinema:
+      type: object
+      required: [id, name, address]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        address:
+          type: string
+    Movie:
+      type: object
+      required: [id, title, durationMinutes, ageRating]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        durationMinutes:
+          type: integer
+          minimum: 1
+        ageRating:
+          type: string
+          example: 16+
+    Screening:
+      type: object
+      required: [id, cinemaId, movieId, startsAt, basePrice]
+      properties:
+        id:
+          type: string
+          format: uuid
+        cinemaId:
+          type: string
+          format: uuid
+        movieId:
+          type: string
+          format: uuid
+        startsAt:
+          type: string
+          format: date-time
+        basePrice:
+          type: number
+          format: float
+    Seat:
+      type: object
+      required: [id, rowNumber, seatNumber, available]
+      properties:
+        id:
+          type: string
+          format: uuid
+        rowNumber:
+          type: integer
+          minimum: 1
+        seatNumber:
+          type: integer
+          minimum: 1
+        available:
+          type: boolean
+    ScreeningSeats:
+      type: object
+      required: [screeningId, seats]
+      properties:
+        screeningId:
+          type: string
+          format: uuid
+        seats:
+          type: array
+          items:
+            $ref: '#/components/schemas/Seat'
+    CreateOrderRequest:
+      type: object
+      required: [screeningId, seatIds, customerEmail]
+      properties:
+        screeningId:
+          type: string
+          format: uuid
+        seatIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        customerEmail:
+          type: string
+          format: email
+    Ticket:
+      type: object
+      required: [id, seatId, price, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        seatId:
+          type: string
+          format: uuid
+        price:
+          type: number
+          format: float
+        status:
+          type: string
+          enum: [held, paid, cancelled]
+    Order:
+      type: object
+      required: [id, screeningId, status, totalAmount, tickets]
+      properties:
+        id:
+          type: string
+          format: uuid
+        screeningId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending_payment, paid, cancelled]
+        totalAmount:
+          type: number
+          format: float
+        tickets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ticket'
+    Payment:
+      type: object
+      required: [id, orderId, status, paymentUrl]
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, succeeded, failed]
+        paymentUrl:
+          type: string
+          format: uri
+    PaymentCallback:
+      type: object
+      required: [providerPaymentId, status]
+      properties:
+        providerPaymentId:
+          type: string
+        status:
+          type: string
+          enum: [succeeded, failed]
