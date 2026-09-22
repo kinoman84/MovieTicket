@@ -25,7 +25,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentSession'
+  /payments/{providerPaymentId}/refunds:
+    post:
+      summary: Инициировать возврат по успешному платежу
+      description: >-
+        Принимает заявку на полный или частичный возврат. Окончательный результат
+        провайдер асинхронно отправляет на callbackUrl. Один платёж может иметь
+        несколько возвратов, но их суммарная сумма не может превышать сумму
+        успешного платежа.
+      operationId: createRefund
+      parameters:
+        - $ref: '#/components/parameters/ProviderPaymentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRefundRequest'
+      responses:
+        '202':
+          description: Заявка на возврат принята в обработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderRefund'
+        '404':
+          description: Платёж провайдера не найден
+        '409':
+          description: Платёж неуспешен или сумма возвратов превышает сумму платежа
+        '422':
+          description: Некорректные данные заявки на возврат
 components:
+  parameters:
+    ProviderPaymentId:
+      name: providerPaymentId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Идентификатор исходного платежа у провайдера.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+      description: >-
+        Ключ идемпотентности заявки на возврат. Для повторов одной заявки должен
+        использоваться тот же ключ.
   schemas:
     CreatePaymentRequest:
       type: object
@@ -57,3 +107,56 @@ components:
           type: string
           format: uri
           description: Ссылка на страницу оплаты для покупателя.
+    CreateRefundRequest:
+      type: object
+      required: [amount, callbackUrl]
+      properties:
+        amount:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Сумма возврата в валюте исходного платежа.
+        callbackUrl:
+          type: string
+          format: uri
+          description: >-
+            URL КиноБилета, на который провайдер отправляет итоговый статус
+            возврата.
+    ProviderRefund:
+      type: object
+      required: [providerRefundId, providerPaymentId, amount, status]
+      properties:
+        providerRefundId:
+          type: string
+          description: Идентификатор возврата у провайдера.
+        providerPaymentId:
+          type: string
+          description: Идентификатор исходного платежа у провайдера.
+        amount:
+          type: number
+          format: float
+          description: Принятая к возврату сумма в валюте исходного платежа.
+        status:
+          type: string
+          enum: [pending]
+          description: Заявка принята; финальный статус придёт на callbackUrl.
+    RefundCallback:
+      type: object
+      required: [providerRefundId, providerPaymentId, amount, status]
+      properties:
+        providerRefundId:
+          type: string
+          description: Идентификатор возврата у провайдера.
+        providerPaymentId:
+          type: string
+          description: Идентификатор исходного платежа у провайдера.
+        amount:
+          type: number
+          format: float
+          description: >-
+            Фактически возвращённая сумма по этой операции. Может соответствовать
+            полной либо частичной отмене исходного платежа.
+        status:
+          type: string
+          enum: [succeeded, failed]
+          description: Итоговый статус возврата.
